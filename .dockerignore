@@ -1,0 +1,30 @@
+# Данные и результаты обучения — не нужны в контейнере
+data/
+runs/
+notebooks/
+.venv/
+__pycache__/
+*.pyc
+
+# Скрипты обучения
+finetune_mot20.py
+run_tracker_eval.py
+watch_training.py
+
+# Git и IDE
+.git/
+.gitignore
+.vscode/
+*.md
+
+# Предобученные веса (не финальные)
+notebooks/*.pt
+yolo11n.pt
+yolo26n.pt
+
+# SQLite БД (создаётся при запуске)
+storage.db
+
+# Временные файлы
+*.tmp
+*.log

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Модели (большие бинарные файлы)
+models/*.pt
+models/*.onnx
+
+# Данные
+data/
+
+# БД
+*.db
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# uv — lock файл коммитим, кэш нет
+.uv-cache/

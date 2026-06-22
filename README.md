@@ -154,15 +154,6 @@ curl -X POST http://localhost:8000/upload-and-process \
 }
 ```
 
-### Установить виртуальную линию подсчёта
-
-```bash
-# Вертикальная линия на 50% ширины кадра (относительные координаты)
-curl -X POST http://localhost:8000/calibration \
-  -H "Content-Type: application/json" \
-  -d '{"x1": 0.5, "y1": 0.0, "x2": 0.5, "y2": 1.0, "relative": true}'
-```
-
 ### Получить статистику
 
 ```bash

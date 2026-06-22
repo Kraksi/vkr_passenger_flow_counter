@@ -1,4 +1,3 @@
-# ByteTrack — управление треками людей между кадрами
 from __future__ import annotations
 import numpy as np
 import supervision as sv
@@ -11,7 +10,7 @@ from app.config import (
 
 
 class Tracker:
-    """Обёртка над ByteTrack (supervision) для сопоставления детекций между кадрами."""
+    """обёртка над ByteTrack (supervision), сшивает детекции между кадрами"""
 
     def __init__(
         self,
@@ -27,7 +26,7 @@ class Tracker:
         self._tracker: sv.ByteTrack | None = None
 
     def init(self) -> None:
-        """Создать объект трекера."""
+        """создать трекер"""
         self._tracker = sv.ByteTrack(
             track_activation_threshold=self.track_thresh,
             minimum_matching_threshold=self.match_thresh,
@@ -36,15 +35,11 @@ class Tracker:
         )
 
     def reset(self) -> None:
-        """Сбросить все треки (при смене видео)."""
+        """сброс треков (смена видео)"""
         self.init()
 
     def update(self, detections: list[dict], frame: np.ndarray) -> list[dict]:
-        """
-        Принять детекции текущего кадра, вернуть активные треки.
-
-        Каждый трек: {'track_id': int, 'bbox': [x1, y1, x2, y2], 'conf': float}
-        """
+        """детекции кадра - активные треки {track_id, bbox, conf}"""
         if self._tracker is None:
             raise RuntimeError("Трекер не инициализирован. Вызовите init().")
 

@@ -1,39 +1,81 @@
+import os
 from pathlib import Path
 
-# Корень проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Пути к моделям и данным
-MODEL_PATH = BASE_DIR / "models" / "yolo11n_mot20_v2.pt"
+STATE_DIR = Path(os.environ.get("VKR_STATE_DIR", BASE_DIR))
+
+MODEL_PATH = Path(os.environ.get("VKR_MODEL_PATH", str(BASE_DIR / "models" / "yolo11n_mot20_v2.pt")))
+MODEL_ONNX_PATH = BASE_DIR / "models" / "yolo11n_mot20_v2.onnx"
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = BASE_DIR / "storage.db"
+DB_PATH = Path(os.environ.get("VKR_DB_PATH", STATE_DIR / "storage.db"))
 
-# Параметры детектора
-DETECTOR_CONF_THRESHOLD = 0.20  # минимальная уверенность детекции
-DETECTOR_IOU_THRESHOLD = 0.45   # порог NMS
-DETECTOR_DEVICE = "cuda"        # 'cuda' или 'cpu'
-DETECTOR_CLASS_PERSON = 0       # индекс класса "person" в COCO
+DETECTOR_BACKEND = os.environ.get("VKR_DETECTOR_BACKEND", "pytorch")
+DETECTOR_CONF_THRESHOLD = 0.20
+DETECTOR_IOU_THRESHOLD = 0.45
+DETECTOR_DEVICE = os.environ.get("VKR_DETECTOR_DEVICE", "cuda")
+DETECTOR_CLASS_PERSON = 0
 
-# Параметры трекера ByteTrack
-TRACKER_TRACK_THRESH = 0.25     # порог активации нового трека
-TRACKER_MATCH_THRESH = 0.85     # порог сопоставления детекций с треками
-TRACKER_TRACK_BUFFER = 75       # кадров до удаления потерянного трека
-TRACKER_FRAME_RATE = 25         # FPS видео (используется ByteTrack)
+HEAD_MODEL_PATH = Path(os.environ.get(
+    "VKR_HEAD_MODEL_PATH", str(BASE_DIR / "models" / "yolo11_head.pt")))
+HEAD_CONF_THRESHOLD = 0.30
+HEAD_IOU_THRESHOLD = 0.45
 
-# Параметры счётчика по линии
-COUNTER_HYSTERESIS_MIN_SEC = 2.0   # минимальный интервал между событиями одного трека
-COUNTER_HYSTERESIS_MAX_SEC = 10.0  # максимальный интервал (сброс состояния)
+TRACKER_BACKEND = os.environ.get("VKR_TRACKER_BACKEND", "osnet")
 
-# Виртуальная линия — относительные координаты (0.0–1.0 от размера кадра)
-# Переопределяется через API /calibration (принимает как относительные, так и абсолютные)
-# По умолчанию: горизонтальная линия на 75% высоты кадра
+TRACKER_TRACK_THRESH = 0.25
+TRACKER_MATCH_THRESH = 0.85
+TRACKER_TRACK_BUFFER = 75
+TRACKER_FRAME_RATE = 25
+
+REID_WEIGHTS_PATH = Path(os.environ.get(
+    "VKR_REID_WEIGHTS", str(BASE_DIR / "models" / "osnet_x0_25_msmt17.pt")))
+OSNET_TRACK_HIGH_THRESH = 0.30
+OSNET_NEW_TRACK_THRESH = 0.50
+OSNET_MATCH_THRESH = 0.80
+OSNET_TRACK_BUFFER = 90
+OSNET_APPEARANCE_THRESH = 0.25
+OSNET_CMC_METHOD = "ecc"
+
+EDGE_TRACKER_TRACK_THRESH = 0.25
+EDGE_TRACKER_MATCH_THRESH = 0.80
+EDGE_TRACKER_TRACK_BUFFER = 45
+EDGE_TRACKER_FRAME_RATE = 15
+
+COUNTER_MODE = os.environ.get("VKR_COUNTER_MODE", "tripwire")
+
+ZONE_RECT = (0.0, 0.0, 0.45, 1.0)
+ZONE_DIRECTION = "down_in"
+ZONE_TRAVEL_REL = 0.20
+ZONE_MIN_FRAMES = 5
+
+COUNTER_HYSTERESIS_MIN_SEC = 2.0
+COUNTER_HYSTERESIS_MAX_SEC = 10.0
+
+TRIPWIRE_Y1 = 0.42
+TRIPWIRE_Y2 = 0.70
+TRIPWIRE_ROI_X = (0.0, 0.35)
+TRIPWIRE_WINDOW_FRAMES = 120
+TRIPWIRE_MIN_FRAMES = 15
+TRIPWIRE_LOST_FRAMES = 100
+TRIPWIRE_DEDUP_FRAMES = 25
+TRIPWIRE_DEDUP_X_FRAC = 0.25
+TRIPWIRE_CONVENTION = "B"
+
+DOOR_ZONE_POINTS = [
+    [1 / 3, 0.0],
+    [2 / 3, 0.0],
+    [2 / 3, 1.0],
+    [1 / 3, 1.0],
+]
+
 LINE_START = (0.0, 0.75)
 LINE_END = (1.0, 0.75)
-LINE_COORDS_RELATIVE = True  # True = относительные (0–1), False = абсолютные пиксели
+LINE_COORDS_RELATIVE = True
 
-# Папка для загруженных видео
 UPLOAD_DIR = BASE_DIR / "data" / "uploads"
 
-# FastAPI
+CAMERA_CONFIG_PATH = Path(os.environ.get("VKR_CONFIG_PATH", STATE_DIR / "camera_config.json"))
+
 API_HOST = "0.0.0.0"
 API_PORT = 8000

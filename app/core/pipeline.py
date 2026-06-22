@@ -1,38 +1,70 @@
-# Оркестратор: кадр → детекция → трекинг → подсчёт
 from __future__ import annotations
 import time
 import numpy as np
 import cv2
 from pathlib import Path
-from app.core.detector import Detector
-from app.core.tracker import Tracker
-from app.core.counter import LineCounter
-from app.storage.db import EventStore
+from app.core.counter import LineCounter, TripwireCounter, ZoneCounter
+from app.config import (
+    DETECTOR_BACKEND, TRACKER_BACKEND, COUNTER_MODE,
+    ZONE_RECT, ZONE_DIRECTION, ZONE_TRAVEL_REL, ZONE_MIN_FRAMES,
+)
+from app.storage.db import event_store
+
+
+def make_detector():
+    """детектор по DETECTOR_BACKEND (pytorch|onnx|rknn), единый интерфейс load/detect"""
+    if DETECTOR_BACKEND == "rknn":
+        from app.core.detector_rknn import DetectorRKNN
+        return DetectorRKNN()
+    if DETECTOR_BACKEND == "onnx":
+        from app.core.detector_onnx import DetectorONNX
+        return DetectorONNX()
+    from app.core.detector import Detector
+    return Detector()
+
+
+def make_tracker():
+    """трекер по TRACKER_BACKEND (osnet|bytetrack)"""
+    if TRACKER_BACKEND == "osnet":
+        from app.core.tracker_osnet import TrackerOSNet
+        return TrackerOSNet()
+    from app.core.tracker import Tracker
+    return Tracker()
+
+
+def make_counter():
+    """счётчик по COUNTER_MODE (zone|tripwire|lifecycle)"""
+    if COUNTER_MODE == "zone":
+        return ZoneCounter(zone=ZONE_RECT, direction=ZONE_DIRECTION,
+                           travel_rel=ZONE_TRAVEL_REL, min_frames=ZONE_MIN_FRAMES)
+    if COUNTER_MODE == "tripwire":
+        return TripwireCounter()
+    return LineCounter()
 
 
 class Pipeline:
-    """Связывает детектор, трекер и счётчик в единый поток обработки."""
+    """детектор + трекер + счётчик в одном потоке обработки"""
 
     def __init__(self) -> None:
-        self.detector = Detector()
-        self.tracker = Tracker()
-        self.counter = LineCounter()
-        self.store = EventStore()
+        self.detector = make_detector()
+        self.tracker = make_tracker()
+        self.counter = make_counter()
+        self.store = event_store
         self._initialized = False
         self._source: str | None = None
         self._running = False
         self._last_fps: float = 0.0
 
     def initialize(self) -> None:
-        """Загрузить модель и инициализировать трекер."""
+        """грузим модель, инициализируем трекер и БД"""
         self.detector.load()
         self.tracker.init()
-        self.store.connect()
+        if self.store._conn is None:
+            self.store.connect()
         self._initialized = True
 
     def shutdown(self) -> None:
-        """Освободить ресурсы."""
-        self.store.close()
+        """освободить ресурсы"""
         self._initialized = False
 
     @property
@@ -40,17 +72,7 @@ class Pipeline:
         return self._initialized
 
     def process_frame(self, frame: np.ndarray) -> dict:
-        """
-        Обработать один кадр.
-
-        Возвращает:
-        {
-            'tracks': [...],
-            'events': [...],
-            'stats': {...},
-            'latency_ms': float,
-        }
-        """
+        """один кадр - {tracks, events, stats, latency_ms}"""
         if not self._initialized:
             raise RuntimeError("Pipeline не инициализирован. Вызовите initialize().")
 
@@ -60,7 +82,6 @@ class Pipeline:
         tracks = self.tracker.update(detections, frame)
         events = self.counter.update(tracks)
 
-        # Сохраняем события в БД
         if events:
             self.store.save_events(events)
 
@@ -74,9 +95,7 @@ class Pipeline:
         }
 
     def process_video(self, video_path: str | Path) -> dict:
-        """
-        Обработать видеофайл целиком. Возвращает итоговую статистику.
-        """
+        """прогнать видео целиком - итоговая статистика"""
         if not self._initialized:
             raise RuntimeError("Pipeline не инициализирован. Вызовите initialize().")
 
@@ -109,6 +128,10 @@ class Pipeline:
             cap.release()
             self._running = False
 
+        final_events = self.counter.finalize_remaining()
+        if final_events:
+            self.store.save_events(final_events)
+
         avg_latency = total_latency / max(frame_count, 1)
         self._last_fps = 1000.0 / avg_latency if avg_latency > 0 else 0.0
         self._source = None
@@ -121,7 +144,7 @@ class Pipeline:
         }
 
     def stop(self) -> None:
-        """Остановить обработку видео."""
+        """стоп обработки видео"""
         self._running = False
 
     @property

@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Калибровка и тест - Счётчик пассажиропотока</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0d0f1a;
+  color: #e2e8f0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  background: #13162a;
+  border-bottom: 1px solid #1e2540;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+header h1 { font-size: 16px; font-weight: 700; color: #818cf8; letter-spacing: -0.01em; }
+.header-sub { font-size: 12px; color: #4b5680; }
+.header-badges { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.badge {
+  font-size: 11px; padding: 3px 9px; border-radius: 10px;
+  background: #1a1e35; color: #64748b;
+}
+.badge b { color: #a5b4fc; }
+.badge.live { background: #052e16; color: #4ade80; }
+.badge.live b { color: #22c55e; }
+
+main { display: flex; flex: 1; overflow: hidden; }
+
+aside {
+  width: 268px;
+  background: #111428;
+  border-right: 1px solid #1a1d35;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.panel-block {
+  padding: 12px 14px;
+  border-bottom: 1px solid #1a1d35;
+}
+.panel-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: #4b5680; margin-bottom: 10px;
+}
+
+#camera-list {
+  display: flex; flex-direction: column; gap: 5px;
+  flex: 1; overflow-y: auto;
+}
+.cam-card {
+  padding: 8px 10px; border-radius: 7px;
+  background: #181c30; cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
+}
+.cam-card:hover { background: #1e2238; }
+.cam-card.active { border-color: #6366f1; background: #1a1e38; }
+.cam-card.counting { border-color: #16a34a; }
+.cam-card.active.counting { border-color: #4ade80; }
+
+.cam-name {
+  font-size: 13px; font-weight: 600; color: #c7d2fe;
+  display: flex; align-items: center; gap: 6px;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot.alive { background: #22c55e; }
+.dot.dead  { background: #ef4444; }
+.dot.counting { background: #4ade80; box-shadow: 0 0 5px #16a34a; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+.cam-meta { font-size: 11px; color: #3d4a6b; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cam-btns { display: flex; gap: 5px; margin-top: 7px; }
+
+.btn-xs {
+  font-size: 11px; padding: 3px 8px; border-radius: 4px;
+  border: 1px solid #2a3050; background: transparent; color: #6b7ba8;
+  cursor: pointer; white-space: nowrap;
+}
+.btn-xs:hover { background: #2a3050; color: #e2e8f0; }
+.btn-xs.start  { border-color: #14532d; color: #4ade80; }
+.btn-xs.start:hover { background: #14532d; }
+.btn-xs.stop   { border-color: #7f1d1d; color: #f87171; }
+.btn-xs.stop:hover { background: #7f1d1d; }
+.btn-xs.danger { border-color: #450a0a; color: #9b2828; }
+.btn-xs.danger:hover { background: #450a0a; color: #fca5a5; }
+
+.empty-tip { font-size: 12px; color: #2a3050; text-align: center; padding: 10px 0; }
+
+.form-col { display: flex; flex-direction: column; gap: 7px; }
+label { font-size: 11px; color: #5a6890; }
+input[type="text"] {
+  width: 100%; padding: 7px 9px;
+  border-radius: 6px; border: 1px solid #1e2540;
+  background: #0d0f1a; color: #e2e8f0; font-size: 12px; outline: none;
+}
+input[type="text"]:focus { border-color: #4f46e5; }
+input[type="text"]::placeholder { color: #2a3050; }
+
+.presets { display: flex; flex-direction: column; gap: 4px; }
+.preset-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 5px;
+  background: #181c30; border: 1px solid #1e2540;
+  cursor: pointer; text-align: left;
+}
+.preset-btn:hover { background: #1e2238; border-color: #2a3254; }
+.preset-icon { font-size: 16px; flex-shrink: 0; }
+.preset-info .preset-name { font-size: 11px; font-weight: 600; color: #a5b4fc; }
+.preset-info .preset-desc { font-size: 10px; color: #4b5680; margin-top: 1px; }
+
+.btn {
+  width: 100%; padding: 8px; border-radius: 6px; border: none;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: opacity 0.12s, transform 0.1s; letter-spacing: 0.01em;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-indigo { background: #4f46e5; color: #fff; }
+.btn-indigo:hover:not(:disabled) { background: #4338ca; }
+
+.status-line {
+  font-size: 11px; text-align: center; min-height: 15px; margin-top: 5px;
+}
+.ok  { color: #4ade80; }
+.err { color: #f87171; }
+.inf { color: #60a5fa; }
+
+.cam-nav { padding: 10px 14px; border-top: 1px solid #1a1d35; flex-shrink: 0; }
+.nav-row { display: flex; gap: 6px; }
+.btn-nav {
+  flex: 1; padding: 6px; border-radius: 5px;
+  border: 1px solid #1e2540; background: transparent;
+  color: #5a6890; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.btn-nav:hover { background: #1e2238; color: #e2e8f0; }
+
+.workspace { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.ws-header {
+  padding: 10px 16px; border-bottom: 1px solid #1a1d35;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  background: #111428;
+}
+.ws-cam-name { font-size: 14px; font-weight: 700; color: #818cf8; }
+.ws-mode-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.ws-mode-badge.calib  { background: #1e1b4b; color: #a5b4fc; }
+.ws-mode-badge.counting { background: #052e16; color: #4ade80; }
+
+.stats-row {
+  display: flex; gap: 10px; margin-left: auto; align-items: center;
+}
+.stat-box {
+  text-align: center; background: #181c30;
+  border: 1px solid #1e2540; border-radius: 6px;
+  padding: 4px 10px; min-width: 54px;
+}
+.stat-box .stat-val { font-size: 18px; font-weight: 800; line-height: 1.1; }
+.stat-box .stat-lbl { font-size: 9px; color: #4b5680; text-transform: uppercase; letter-spacing: 0.08em; }
+.stat-val.in    { color: #38bdf8; }
+.stat-val.out   { color: #fb923c; }
+.stat-val.now   { color: #4ade80; }
+.stat-val.fps   { color: #a78bfa; font-size: 14px; }
+.stat-val.lat   { color: #94a3b8; font-size: 14px; }
+
+.stream-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 12px; overflow: hidden; background: #0a0c18;
+}
+.stream-wrap {
+  position: relative; display: inline-flex;
+  box-shadow: 0 0 0 1px #1e2540; border-radius: 4px; overflow: hidden;
+  background: #060810;
+}
+#stream-img {
+  display: block; max-width: 100%;
+  max-height: calc(100vh - 210px); object-fit: contain;
+}
+#canvas-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  cursor: crosshair;
+}
+.placeholder {
+  width: 600px; height: 340px; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  color: #1e2540; gap: 10px; border: 2px dashed #1a1d35; border-radius: 6px;
+}
+.placeholder svg { width: 52px; height: 52px; }
+.placeholder p { font-size: 14px; }
+.placeholder small { font-size: 12px; color: #2a3050; }
+
+.controls-bar {
+  padding: 10px 16px; border-top: 1px solid #1a1d35;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  background: #111428;
+}
+.ctrl-btn {
+  padding: 7px 18px; border-radius: 6px; border: none;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.ctrl-btn.save    { background: #4f46e5; color: #fff; }
+.ctrl-btn.save:hover:not(:disabled)   { background: #4338ca; }
+.ctrl-btn.start   { background: #15803d; color: #fff; }
+.ctrl-btn.start:hover:not(:disabled)  { background: #166534; }
+.ctrl-btn.stop    { background: #b91c1c; color: #fff; }
+.ctrl-btn.stop:hover:not(:disabled)   { background: #991b1b; }
+.ctrl-btn.reset   { background: #1e2540; color: #94a3b8; border: 1px solid #2a3254; }
+.ctrl-btn.reset:hover:not(:disabled)  { background: #2a3254; color: #e2e8f0; }
+
+#ctrl-status { font-size: 12px; min-width: 160px; }
+.coords-hint { margin-left: auto; font-size: 11px; color: #2a3050; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Счётчик пассажиропотока</h1>
+  <div class="header-sub">Калибровка и тестирование</div>
+  <div class="header-badges">
+    <div class="badge">Камер: <b id="badge-count">0</b> / <b id="badge-max">6</b></div>
+    <div class="badge live" id="badge-live" style="display:none">
+      <b>● LIVE</b>
+    </div>
+  </div>
+</header>
+
+<main>
+<aside>
+
+  <div class="panel-block" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;">
+    <div class="panel-title">Камеры</div>
+    <div id="camera-list">
+      <div class="empty-tip">Нет подключённых камер</div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-title">Подключить камеру</div>
+    <div class="form-col">
+      <label>Идентификатор камеры</label>
+      <input type="text" id="inp-cam-id" placeholder="door_1" value="door_1">
+      <label>Источник</label>
+      <input type="text" id="inp-source">
+      <button class="btn btn-indigo" id="btn-connect" onclick="connectCamera()">
+        Подключить
+      </button>
+      <div class="status-line" id="connect-status"></div>
+    </div>
+  </div>
+
+
+</aside>
+
+<div class="workspace">
+
+  <div class="ws-header">
+    <span class="ws-cam-name" id="ws-cam-name">Не выбрана</span>
+    <span class="ws-mode-badge calib" id="ws-mode-badge">Калибровка</span>
+    <div class="stats-row" id="stats-row" style="display:none">
+      <div class="stat-box">
+        <div class="stat-val in" id="stat-in">0</div>
+        <div class="stat-lbl">ВОШЛИ</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val out" id="stat-out">0</div>
+        <div class="stat-lbl">ВЫШЛИ</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val now" id="stat-now">0</div>
+        <div class="stat-lbl">ВНУТРИ</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val fps" id="stat-fps">-</div>
+        <div class="stat-lbl">FPS</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val lat" id="stat-lat">-</div>
+        <div class="stat-lbl">мс</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stream-area">
+    <div class="placeholder" id="stream-placeholder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0
+             01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0
+             002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25
+             2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
+      </svg>
+      <p>Выберите камеру из списка</p>
+      <small>Подключите камеру в панели слева</small>
+    </div>
+    <div class="stream-wrap" id="stream-wrap" style="display:none">
+      <img id="stream-img" alt="Видеопоток">
+      <canvas id="canvas-overlay"></canvas>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <button class="ctrl-btn save"  id="btn-save"  onclick="saveZone()"  disabled>Сохранить зону</button>
+    <button class="ctrl-btn reset" id="btn-direction" onclick="toggleDirection()">Вход вниз</button>
+    <button class="ctrl-btn start" id="btn-start" onclick="startCounting()" disabled>▶ Запустить подсчёт</button>
+    <button class="ctrl-btn stop"  id="btn-stop"  onclick="stopCounting()"  style="display:none">■ Стоп</button>
+    <button class="ctrl-btn reset" id="btn-reset" onclick="resetStats()"    style="display:none">Сбросить</button>
+    <span class="status-line" id="ctrl-status"></span>
+    <span class="coords-hint" id="coords-hint">
+      <span id="coord-a" style="color:#22d3ee">-</span> &nbsp;
+      <span id="coord-b" style="color:#fb923c">-</span>
+    </span>
+  </div>
+
+</div>
+</main>
+
+<script>
+let cameras     = [];
+let activeCamId = null;
+let counting    = false;
+let statsInterval = null;
+
+let quad = [{x:1/3,y:0.0}, {x:2/3,y:0.0}, {x:2/3,y:1.0}, {x:1/3,y:1.0}];
+let direction = 'down_in';
+let dragging = -1;
+let tripwire = { y1: 0.42, y2: 0.70 };
+
+const DRAG_R  = 18;
+const COL_A   = '#22d3ee';
+const COL_B   = '#fb923c';
+const COL_LN  = '#22c55e';
+const COL_LN_COUNT = '#4ade80';
+const COL_TRIP = '#ef4444';
+
+const streamImg   = document.getElementById('stream-img');
+const canvas      = document.getElementById('canvas-overlay');
+const ctx         = canvas.getContext('2d');
+const placeholder = document.getElementById('stream-placeholder');
+const streamWrap  = document.getElementById('stream-wrap');
+
+function syncCanvas() {
+  const r = streamImg.getBoundingClientRect();
+  if (r.width > 0 && (canvas.width !== Math.round(r.width) || canvas.height !== Math.round(r.height))) {
+    canvas.width  = Math.round(r.width);
+    canvas.height = Math.round(r.height);
+  }
+  if (canvas.width > 0) drawCanvas();
+}
+
+function startRenderLoop() {
+  function loop() {
+    if (activeCamId) { syncCanvas(); requestAnimationFrame(loop); }
+  }
+  requestAnimationFrame(loop);
+}
+
+function drawCanvas() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!w || !h) return;
+
+  const P = quad.map(p => ({ x: p.x * w, y: p.y * h }));
+
+  if (!counting) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.moveTo(P[0].x, P[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(P[i].x, P[i].y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(P[0].x, P[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(P[i].x, P[i].y);
+  ctx.closePath();
+  ctx.strokeStyle = counting ? COL_LN_COUNT : '#fde047';
+  ctx.lineWidth = counting ? 2 : 2.5;
+  ctx.globalAlpha = counting ? 0.4 : 0.95;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  drawTripLine(tripwire.y1 * h, 'L1');
+  drawTripLine(tripwire.y2 * h, 'L2');
+
+  const mx = P.reduce((s, p) => s + p.x, 0) / 4;
+  const ytop = Math.min(...P.map(p => p.y)), ybot = Math.max(...P.map(p => p.y));
+  drawArrow(mx, direction === 'down_in' ? ytop + 18 : ybot - 18,
+                direction === 'down_in' ? ybot - 18 : ytop + 18);
+
+  if (!counting) {
+    const labels = ['◤', '◥', '◢', '◣'];
+    P.forEach((p, i) => drawHandle(p.x, p.y, i < 2 ? COL_A : COL_B, labels[i]));
+  }
+
+  document.getElementById('coord-a').textContent =
+    `◤[${quad[0].x.toFixed(2)},${quad[0].y.toFixed(2)}] ◥[${quad[1].x.toFixed(2)},${quad[1].y.toFixed(2)}]`;
+  document.getElementById('coord-b').textContent =
+    `◢[${quad[2].x.toFixed(2)},${quad[2].y.toFixed(2)}] ◣[${quad[3].x.toFixed(2)},${quad[3].y.toFixed(2)}]`;
+}
+
+function drawTripLine(y, label) {
+  const w = canvas.width;
+  ctx.strokeStyle = COL_TRIP;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([12, 8]);
+  ctx.beginPath();
+  ctx.moveTo(0, y); ctx.lineTo(w, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = COL_TRIP;
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(label, 8, y - 4);
+}
+
+function drawArrow(x, y0, y1) {
+  const col = direction === 'down_in' ? '#4ade80' : '#3b82f6';
+  ctx.strokeStyle = col; ctx.fillStyle = col;
+  ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+  const d = y1 > y0 ? 1 : -1;
+  ctx.beginPath();
+  ctx.moveTo(x, y1); ctx.lineTo(x - 7, y1 - 12 * d); ctx.lineTo(x + 7, y1 - 12 * d);
+  ctx.closePath(); ctx.fill();
+  ctx.font = 'bold 13px monospace'; ctx.fillText('IN', x + 10, y1 - 6 * d);
+  ctx.globalAlpha = 1;
+}
+
+function drawHandle(x, y, color, label) {
+  ctx.beginPath();
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + (label === 'A' ? -22 : 13), y - 15);
+}
+
+function evPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: (t.clientX - r.left) / canvas.width, y: (t.clientY - r.top) / canvas.height };
+}
+
+function distPx(p, pos) {
+  return Math.hypot((p.x - pos.x) * canvas.width, (p.y - pos.y) * canvas.height);
+}
+function pickCorner(pos) {
+  let best = -1, bestD = DRAG_R;
+  for (let i = 0; i < 4; i++) {
+    const d = distPx(quad[i], pos);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+function applyDrag(pos) {
+  quad[dragging].x = Math.max(0, Math.min(1, pos.x));
+  quad[dragging].y = Math.max(0, Math.min(1, pos.y));
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (counting) return;
+  e.preventDefault();
+  dragging = pickCorner(evPos(e));
+  if (dragging !== -1) canvas.style.cursor = 'grabbing';
+}, { passive: false });
+
+canvas.addEventListener('mousemove', e => {
+  if (dragging === -1) return;
+  e.preventDefault();
+  applyDrag(evPos(e));
+}, { passive: false });
+
+canvas.addEventListener('mouseup',    e => { e.preventDefault(); const moved = dragging !== -1; dragging = -1; canvas.style.cursor = counting ? 'default' : 'crosshair'; if (moved) saveZone(); }, { passive: false });
+canvas.addEventListener('mouseleave', e => { const moved = dragging !== -1; dragging = -1; if (moved) saveZone(); }, { passive: false });
+canvas.addEventListener('touchstart', e => { if (!counting) { e.preventDefault(); dragging = pickCorner(evPos(e)); } }, { passive: false });
+canvas.addEventListener('touchmove',  e => { if (dragging === -1) return; e.preventDefault(); applyDrag(evPos(e)); }, { passive: false });
+canvas.addEventListener('touchend',   e => { e.preventDefault(); const moved = dragging !== -1; dragging = -1; if (moved) saveZone(); }, { passive: false });
+
+function toggleDirection() {
+  direction = direction === 'down_in' ? 'up_in' : 'down_in';
+  const b = document.getElementById('btn-direction');
+  if (b) b.textContent = direction === 'down_in' ? 'Вход вниз' : 'Вход вверх';
+}
+
+async function api(method, url, body) {
+  const opts = { method, headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(url, opts);
+  return { ok: res.ok, data: await res.json() };
+}
+
+async function fetchCameras() {
+  try {
+    const { data } = await api('GET', '/cameras');
+    cameras = data.cameras;
+    document.getElementById('badge-count').textContent = cameras.length;
+    document.getElementById('badge-max').textContent   = data.max_cameras;
+    renderList();
+    if (activeCamId) {
+      const cam = cameras.find(c => c.cam_id === activeCamId);
+      if (cam && cam.counting !== counting) setCounting(cam.counting);
+    }
+  } catch (_) {}
+}
+
+function renderList() {
+  const el = document.getElementById('camera-list');
+  if (!cameras.length) { el.innerHTML = '<div class="empty-tip">Нет подключённых камер</div>'; return; }
+  el.innerHTML = cameras.map(cam => {
+    const isActive   = cam.cam_id === activeCamId;
+    const dotClass   = cam.counting ? 'counting' : (cam.alive ? 'alive' : 'dead');
+    const cardClass  = `cam-card ${isActive ? 'active' : ''} ${cam.counting ? 'counting' : ''}`;
+    const startBtn = cam.counting
+      ? `<button class="btn-xs stop"   onclick="event.stopPropagation(); stopCounting('${cam.cam_id}')">■ Стоп</button>`
+      : `<button class="btn-xs start"  onclick="event.stopPropagation(); startCounting('${cam.cam_id}')">▶ Запустить</button>`;
+    return `
+      <div class="${cardClass}" onclick="selectCamera('${cam.cam_id}')">
+        <div class="cam-name"><span class="dot ${dotClass}"></span>${cam.cam_id}</div>
+        <div class="cam-meta">${cam.source} | ${cam.width}x${cam.height} | ${cam.fps}fps</div>
+        <div class="cam-btns">
+          ${startBtn}
+          <button class="btn-xs danger" onclick="event.stopPropagation(); disconnectCamera('${cam.cam_id}')">Отключить</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function connectCamera() {
+  const camId  = document.getElementById('inp-cam-id').value.trim();
+  const source = document.getElementById('inp-source').value.trim();
+  if (!camId || !source) { setConnectStatus('Заполните оба поля', 'err'); return; }
+  document.getElementById('btn-connect').disabled = true;
+  setConnectStatus('Подключение...', 'inf');
+  try {
+    const { ok, data } = await api('POST', `/cameras/${encodeURIComponent(camId)}/connect`, { source });
+    if (ok) {
+      setConnectStatus(`${camId} подключена`, 'ok');
+      await fetchCameras();
+      selectCamera(camId);
+    } else {
+      setConnectStatus(data.detail || 'Ошибка', 'err');
+    }
+  } catch (_) {
+    setConnectStatus('Сетевая ошибка', 'err');
+  }
+  document.getElementById('btn-connect').disabled = false;
+}
+
+async function disconnectCamera(camId) {
+  await api('DELETE', `/cameras/${encodeURIComponent(camId)}`);
+  if (activeCamId === camId) deactivate();
+  await fetchCameras();
+}
+
+function setConnectStatus(msg, cls) {
+  const el = document.getElementById('connect-status');
+  el.textContent = msg; el.className = `status-line ${cls}`;
+}
+
+async function selectCamera(camId) {
+  activeCamId = camId;
+
+  try {
+    const { ok, data } = await api('GET', `/cameras/${encodeURIComponent(camId)}/calibration`);
+    if (ok && data.zone) {
+      const z = data.zone;
+      if (z.points && z.points.length === 4) {
+        quad = z.points.map(p => ({ x: p[0], y: p[1] }));
+      } else if (z.x1 !== undefined) {
+        quad = [{x:z.x1,y:z.y1}, {x:z.x2,y:z.y1}, {x:z.x2,y:z.y2}, {x:z.x1,y:z.y2}];
+      }
+      direction = z.direction || 'down_in';
+      const b = document.getElementById('btn-direction');
+      if (b) b.textContent = direction === 'down_in' ? 'Вход вниз' : 'Вход вверх';
+    }
+    if (ok && data.tripwire) tripwire = data.tripwire;
+  } catch (_) {}
+
+  const cam = cameras.find(c => c.cam_id === camId);
+  counting = cam ? cam.counting : false;
+
+  placeholder.style.display = 'none';
+  streamWrap.style.display = 'inline-flex';
+  streamImg.src = `/cameras/${encodeURIComponent(camId)}/stream?t=${Date.now()}`;
+
+  document.getElementById('ws-cam-name').textContent = camId;
+  document.getElementById('btn-save').disabled  = false;
+  document.getElementById('btn-start').disabled = false;
+
+  setCounting(counting);
+  renderList();
+  startRenderLoop();
+
+  if (counting) startStatsPolling();
+}
+
+function deactivate() {
+  activeCamId = null;
+  counting = false;
+  streamImg.src = '';
+  placeholder.style.display = 'flex';
+  streamWrap.style.display  = 'none';
+  document.getElementById('ws-cam-name').textContent    = 'Не выбрана';
+  document.getElementById('btn-save').disabled  = true;
+  document.getElementById('btn-start').disabled = true;
+  stopStatsPolling();
+  clearStats();
+}
+
+function setCounting(on) {
+  counting = on;
+  const badge     = document.getElementById('ws-mode-badge');
+  const statsRow  = document.getElementById('stats-row');
+  const liveBadge = document.getElementById('badge-live');
+  const btnStart  = document.getElementById('btn-start');
+  const btnStop   = document.getElementById('btn-stop');
+  const btnReset  = document.getElementById('btn-reset');
+  const btnSave   = document.getElementById('btn-save');
+  const btnDir    = document.getElementById('btn-direction');
+  const coordsHint = document.getElementById('coords-hint');
+
+  if (on) {
+    badge.textContent = '● Подсчёт';
+    badge.className   = 'ws-mode-badge counting';
+    statsRow.style.display  = 'flex';
+    liveBadge.style.display = 'flex';
+    btnStart.style.display  = 'none';
+    btnStop.style.display   = 'inline-block';
+    btnReset.style.display  = 'inline-block';
+    btnSave.disabled = true;
+    if (btnDir) btnDir.style.display = 'none';
+    canvas.style.cursor = 'default';
+    coordsHint.style.display = 'none';
+    startStatsPolling();
+  } else {
+    badge.textContent = 'Калибровка';
+    badge.className   = 'ws-mode-badge calib';
+    statsRow.style.display  = 'none';
+    liveBadge.style.display = 'none';
+    btnStart.style.display  = 'inline-block';
+    btnStop.style.display   = 'none';
+    btnReset.style.display  = 'none';
+    if (activeCamId) btnSave.disabled = false;
+    if (btnDir) btnDir.style.display = 'inline-block';
+    canvas.style.cursor = 'crosshair';
+    coordsHint.style.display = 'flex';
+    stopStatsPolling();
+    clearStats();
+  }
+}
+
+async function saveZone() {
+  if (!activeCamId) return;
+  document.getElementById('btn-save').disabled = true;
+  setCtrlStatus('Сохранение...', 'inf');
+  try {
+    const { ok, data } = await api('POST',
+      `/cameras/${encodeURIComponent(activeCamId)}/calibration`,
+      { points: quad.map(p => [p.x, p.y]), direction, relative: true });
+    if (ok) {
+      setCtrlStatus('Зона сохранена', 'ok');
+      setTimeout(() => { if (!counting) setCtrlStatus('', ''); }, 2500);
+    } else {
+      setCtrlStatus(data.detail || 'Ошибка', 'err');
+    }
+  } catch (_) { setCtrlStatus('Сетевая ошибка', 'err'); }
+  document.getElementById('btn-save').disabled = false;
+}
+const saveLine = saveZone;
+
+async function startCounting(camId) {
+  const target = camId || activeCamId;
+  if (!target) return;
+
+  if (target === activeCamId) {
+    document.getElementById('btn-start').disabled = true;
+    setCtrlStatus('Сохранение зоны...', 'inf');
+    await saveZone();
+    setCtrlStatus('Загрузка модели...', 'inf');
+  }
+
+  try {
+    const { ok, data } = await api('POST', `/cameras/${encodeURIComponent(target)}/start`);
+    if (ok) {
+      if (target === activeCamId) {
+        setCounting(true);
+        setCtrlStatus('', '');
+      }
+      await fetchCameras();
+    } else {
+      if (target === activeCamId) {
+        setCtrlStatus(data.detail || 'Ошибка запуска', 'err');
+        document.getElementById('btn-start').disabled = false;
+      }
+    }
+  } catch (_) {
+    if (target === activeCamId) {
+      setCtrlStatus('Сетевая ошибка', 'err');
+      document.getElementById('btn-start').disabled = false;
+    }
+  }
+}
+
+async function stopCounting(camId) {
+  const target = camId || activeCamId;
+  if (!target) return;
+  await api('POST', `/cameras/${encodeURIComponent(target)}/stop`);
+  if (target === activeCamId) setCounting(false);
+  await fetchCameras();
+}
+
+async function resetStats() {
+  if (!activeCamId) return;
+  await api('POST', `/cameras/${encodeURIComponent(activeCamId)}/reset`);
+  clearStats();
+}
+
+function startStatsPolling() {
+  if (statsInterval) return;
+  statsInterval = setInterval(pollStats, 1000);
+}
+function stopStatsPolling() {
+  clearInterval(statsInterval);
+  statsInterval = null;
+}
+
+async function pollStats() {
+  if (!activeCamId || !counting) return;
+  try {
+    const { ok, data } = await api('GET', `/cameras/${encodeURIComponent(activeCamId)}/stats`);
+    if (ok) {
+      document.getElementById('stat-in').textContent  = data.entries;
+      document.getElementById('stat-out').textContent = data.exits;
+      document.getElementById('stat-now').textContent = data.current_inside;
+      document.getElementById('stat-fps').textContent = data.fps > 0 ? `${data.fps}` : '-';
+      document.getElementById('stat-lat').textContent = data.latency_ms > 0 ? `${data.latency_ms}` : '-';
+    }
+  } catch (_) {}
+}
+
+function clearStats() {
+  ['stat-in','stat-out','stat-now'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('stat-fps').textContent = '-';
+  document.getElementById('stat-lat').textContent = '-';
+}
+
+function setCtrlStatus(msg, cls) {
+  const el = document.getElementById('ctrl-status');
+  el.textContent = msg; el.className = `status-line ${cls}`;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.key === 'Enter' || e.key === 's') && !counting) saveZone();
+});
+
+fetchCameras();
+setInterval(fetchCameras, 4000);
+</script>
+</body>
+</html>

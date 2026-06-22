@@ -51,7 +51,7 @@ async def set_calibration(body: CalibrationRequest):
 
 @router.post("/process", response_model=ProcessVideoResponse, tags=["pipeline"])
 async def process_video(body: ProcessVideoRequest):
-    """Обработать видеофайл и вернуть статистику подсчёта."""
+    """прогнать видео - статистика подсчёта"""
     p = _get_pipeline()
     if not p.is_initialized:
         raise HTTPException(status_code=503, detail="Pipeline не инициализирован")
@@ -71,14 +71,14 @@ async def process_video(body: ProcessVideoRequest):
 
 @router.post("/stop", tags=["pipeline"])
 async def stop_processing():
-    """Остановить текущую обработку видео."""
+    """стоп текущей обработки видео"""
     p = _get_pipeline()
     p.stop()
     return {"status": "stopped"}
 
 
 def _save_upload(file: UploadFile, dest_dir: Path) -> Path:
-    """Сохранить загруженный файл в указанную папку."""
+    """сохранить загруженный файл в папку"""
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / file.filename
     if dest.exists():
@@ -96,7 +96,7 @@ def _save_upload(file: UploadFile, dest_dir: Path) -> Path:
 
 @router.post("/upload", response_model=UploadResponse, tags=["videos"])
 async def upload_video(file: UploadFile = File(...)):
-    """Загрузить видео в папку тестовых данных (data/uploads/)."""
+    """залить видео в data/uploads/"""
     if not file.filename.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
         raise HTTPException(status_code=400, detail="Поддерживаются форматы: mp4, avi, mov, mkv")
     dest = _save_upload(file, UPLOAD_DIR)
@@ -109,7 +109,7 @@ async def upload_and_process(
     file: UploadFile = File(...),
     save: bool = Query(False, description="Сохранить видео в data/uploads/ после обработки"),
 ):
-    """Загрузить видео и сразу обработать. Опционально сохранить в тестовую папку."""
+    """залить видео и сразу обработать, опц сохранить"""
     if not file.filename.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):
         raise HTTPException(status_code=400, detail="Поддерживаются форматы: mp4, avi, mov, mkv")
     p = _get_pipeline()
@@ -136,7 +136,7 @@ async def upload_and_process(
 
 
 def _list_videos(directory: Path) -> list[VideoInfo]:
-    """Собрать список видеофайлов из папки."""
+    """собрать видеофайлы из папки"""
     videos = []
     if not directory.exists():
         return videos
@@ -152,6 +152,6 @@ def _list_videos(directory: Path) -> list[VideoInfo]:
 
 @router.get("/videos", response_model=VideosListResponse, tags=["videos"])
 async def list_videos():
-    """Список всех доступных видео (data/ + data/uploads/)."""
+    """все доступные видео (data/ + data/uploads/)"""
     videos = _list_videos(DATA_DIR)
     return VideosListResponse(videos=videos, total=len(videos))

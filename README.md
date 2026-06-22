@@ -1,11 +1,11 @@
 # Счётчик пассажиропотока
 
-> Магистерская диссертация, НИ ТГУ — Краснов Данила Анатольевич
+> Магистерская диссертация, НИ ТГУ - Краснов Данила Анатольевич
 
 Система автоматического подсчёта пассажиропотока на базе компьютерного зрения.  
 Детектирует и отслеживает людей, считает события **входа/выхода** через виртуальную линию, предоставляет REST API.
 
-**Стек:** YOLOv11n · ByteTrack · FastAPI · OpenCV · PyTorch (CUDA) · SQLite
+**Стек:** YOLOv11n | BotSort+OSNet ReID (дефолт) / ByteTrack | FastAPI | OpenCV | PyTorch (CUDA) | SQLite
 
 ---
 
@@ -13,9 +13,10 @@
 
 ### Swagger UI (REST API)
 
-![Swagger UI](assets/swagger_ui.png)
+Интерактивная документация доступна после запуска сервера на
+[http://localhost:8000/docs](http://localhost:8000/docs).
 
-### Пример вывода CLI-демо
+### Пример вывода обработки видео (RTX 5080)
 
 ```
 Клип                    GT  Pred  MAPE   FPS   Latency
@@ -24,10 +25,8 @@ mall_segment_1          30    24  20.0%  184   5.4 мс
 mall_segment_2          28    22  21.4%  184   5.4 мс
 mall_segment_3          33    25  24.2%  184   5.4 мс
 mall_segment_4          29    21  27.6%  184   5.4 мс
-mot20_01_clip            —     —     —    82  12.0 мс
+mot20_01_clip            -     -     -    82  12.0 мс
 ```
-
-> Подробные метрики приёмочных испытаний — в [`notebooks/04_metrics_acceptance.ipynb`](notebooks/04_metrics_acceptance.ipynb)
 
 ---
 
@@ -35,7 +34,7 @@ mot20_01_clip            —     —     —    82  12.0 мс
 
 | Зависимость | Версия |
 |---|---|
-| Python | ≥ 3.11 |
+| Python | >= 3.11 |
 | CUDA | 12.8+ (NVIDIA GPU) |
 | torch | 2.11.0+cu128 |
 | ultralytics | 8.4.37 |
@@ -43,18 +42,18 @@ mot20_01_clip            —     —     —    82  12.0 мс
 | fastapi | 0.135.3 |
 | opencv-python | 4.13.0.92 |
 
-Полный список — [`requirements-docker.txt`](requirements-docker.txt) (runtime) и [`requirements.txt`](requirements.txt) (dev + Jupyter).
+Полный список - [`requirements-docker.txt`](requirements-docker.txt) (runtime) и [`requirements.txt`](requirements.txt) (dev + Jupyter).
 
 ---
 
 ## Установка
 
-### Вариант 1 — локально (uv)
+### Вариант 1 - локально (uv)
 
 ```bash
 # 1. Клонировать репозиторий
 git clone <repo-url>
-cd vkr-passenger-flow-counter
+cd vkr_passenger_flow_counter
 
 # 2. Создать виртуальное окружение (Python 3.11+)
 uv venv
@@ -69,18 +68,40 @@ uv pip install -r requirements-docker.txt
 uv pip install -r requirements.txt
 
 # 4. Положить веса модели в models/
-# Скачать yolo11n_mot20_v2.pt (см. раздел «Модель» ниже)
+# Скачать yolo11n_mot20_v2.pt
 ```
 
-### Вариант 2 — Docker (GPU)
+### Вариант 2 - Docker (PC, GPU)
+
+Образ на базе `python:3.11-slim` (multi-stage); torch+cu128 несёт свои CUDA-либы,
+GPU пробрасывается через `nvidia-container-toolkit`.
 
 ```bash
-# Сборка образа
-docker build -t passenger-counter .
+# Через docker compose (рекомендуется - GPU)
+docker compose up --build
+#   Swagger UI: http://localhost:8000/docs
 
-# Запуск с проброской GPU
+# Либо вручную
+docker build -t passenger-counter .
 docker run --gpus all -p 8000:8000 passenger-counter
 ```
+
+В образ копируются веса обоих продакшен-стеков: детектор тела `yolo11n_mot20_v2.pt`
+и детектор голов `yolo11_head.pt` + соответствующие ReID-веса OSNet
+(`osnet_x0_25_msmt17.pt`, `osnet_x0_25_mot20head.pt`); БД и конфиг камер пишутся
+в том `counter-db` (`/app/state`).
+
+### Вариант 3 - Edge (RK3588, NPU)
+
+Лёгкий образ для одноплатника на Rockchip RK3588: детектор на NPU (`rknnlite2`),
+трекинг ByteTrack без torch. Сборка и деплой - см. **[EDGE_DEPLOY.md](EDGE_DEPLOY.md)**.
+
+```bash
+docker build -f Dockerfile.edge -t passenger-counter:edge .
+```
+
+Режим переключается переменными окружения без правки кода:
+`VKR_DETECTOR_BACKEND=rknn`, `VKR_TRACKER_BACKEND=bytetrack`.
 
 ---
 
@@ -93,32 +114,23 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- ReDoc:      [http://localhost:8000/redoc](http://localhost:8000/redoc)
 
-### CLI-демо (5 контрольных примеров)
-
-```bash
-# Запустить демо на тестовых видео (выводит таблицу метрик)
-python demo.py
-
-# Указать конкретное видео
-python demo.py --video data/stock_videos/uhd_30fps.mp4 --gt-entries 4 --gt-exits 1
-
-# Запустить на всех видео из папки
-python demo.py --dir data/stock_videos/
-```
-
-### Ноутбуки (обучение и метрики)
+### Ноутбуки (подготовка двух продакшен-путей)
 
 ```bash
 # Открыть VS Code с Jupyter Extension, выбрать kernel .venv
-# Запускать Restart & Run All для каждого ноутбука в порядке:
-# 01 → 02 → 03 → 04
+# Restart & Run All в порядке:
+#   data_preparation  - detector_training
+#   - tracker_edge_bytetrack  (edge-путь: ByteTrack)
+#   - tracker_desktop_botsort (desktop-путь: BoT-SORT + OSNet)
 ```
+
+Экспорт детектора для инференса:
+`python scripts/export.py --format onnx` (desktop) / `--format rknn` (edge RK3588).
 
 ---
 
-## API — примеры запросов
+## API - примеры запросов
 
 ### Загрузить и обработать видео
 
@@ -178,26 +190,54 @@ curl http://localhost:8000/status
 
 | Видео | Разрешение | FPS | Latency |
 |---|---|---|---|
-| MOT20-01 | 1920×1080 | 82 | 12 мс |
-| Mall Dataset | 640×480 | 184 | 5.4 мс |
-| Store entrance | 2560×1440 | 261 | 3.8 мс |
-| Bus boarding | 2160×3840 | 172 | 5.8 мс |
+| MOT20-01 | 1920x1080 | 82 | 12 мс |
+| Mall Dataset | 640x480 | 184 | 5.4 мс |
+| Store entrance | 2560x1440 | 261 | 3.8 мс |
+| Bus boarding | 2160x3840 | 172 | 5.8 мс |
 
-Целевые значения MVP: FPS ≥ 15, Latency ≤ 100 мс — **выполнено с запасом**.
+Целевые значения MVP: FPS >= 15, Latency <= 100 мс - **выполнено с запасом**.
 
 ---
 
 ## Метрики точности
 
-| Метрика | Цель | Факт | Статус |
-|---|---|---|---|
-| F1-Score | ≥ 88% | 88.1% | ✅ |
-| Precision | ≥ 90% | 89.7% | ⚠️ −0.3% |
-| Recall | ≥ 90% | 86.9% | ⚠️ −3.1% |
-| IDF1 | ≥ 75% | 74.93% | ⚠️ −0.07% |
-| MAPE | ≤ 5% | 0% (1 клип) | ⏳ |
+Метрики разнесены по двум уровням - это разные задачи и разные наборы данных.
 
-Детальный расчёт всех метрик — [`notebooks/04_metrics_acceptance.ipynb`](notebooks/04_metrics_acceptance.ipynb).
+### Уровень 1 - детектор и трекер (бенчмарк MOT20)
+
+| Метрика | Цель | Факт | Набор |
+|---|---|---|---|
+| mAP@50 (детектор) | - | 93.1% | MOT20 val, `yolo11n_mot20_v2.pt` |
+| Precision (bbox) | - | 89.7% | MOT20 val |
+| Recall (bbox) | - | 86.9% | MOT20 val |
+| F1 (bbox) | - | 88.3% | MOT20 val |
+| IDF1 (ByteTrack) | >= 75% | 74.93% | MOT20, grid search |
+| IDF1 (BoT-SORT+OSNet) | >= 75% | 73.41% | MOT20 |
+
+> Это качество **детекции и стабильности ID**, а не подсчёта событий. Целевой
+> IDF1 >= 75% фактически достигнут (ByteTrack 74.93%).
+
+### Уровень 2 - подсчёт событий вход/выход (реальные дверные сцены)
+
+Главная прикладная метрика. Замерено на размеченных клипах двух камер автобуса
+(`door1` - 99 клипов / 196 событий; `door2` - 197 клипов / 855 событий).
+Дефолтный стек: детектор `yolo11n_mot20_v2` - **BotSort + OSNet ReID** - двухлинейный
+счётчик **tripwire**.
+
+Камеры измерены **одним и тем же продакшен-классом** `TripwireCounter`:
+
+| Камера | F1 (продакшен) | F1 (офлайн-потолок) | Precision | Recall |
+|---|---|---|---|---|
+| **door1** (передняя дверь, крупный план) | **65.2%** | 69.0% | 63.6% | 66.8% |
+| **door2** (средняя дверь, виден салон) | **61.8%** | 65.6% | 58.9% | 65.0% |
+
+- *Продакшен* - класс `TripwireCounter` из `app/` с базовыми порогами и
+  финализацией по `lost_frames` (как работает развёрнутая система).
+- *Офлайн-потолок* - лучший конфиг при грид-подборе геометрии на той же камере.
+- Разрыв офлайн-продакшен ~ -4 п.п. на **обеих** камерах.
+- Альтернативная ветка door1 "детектор голов + классификатор по смещению" даёт
+  **F1 72.0%**, но требует отдельной модели голов и не вынесена в
+  дефолт.
 
 ---
 
@@ -205,32 +245,41 @@ curl http://localhost:8000/status
 
 ```
 Видео/кадр
-    │
-    ▼
-[Detector]          YOLOv11n (CUDA) — детекция людей
-    │ bbox + conf
-    ▼
-[Tracker]           ByteTrack (supervision) — сопоставление треков
-    │ track_id + bbox
-    ▼
-[LineCounter]       виртуальная линия + гистерезис 2–10 с
-    │ entry/exit events
-    ▼
-[EventStore]        SQLite — персистентность событий
-    │
-    ▼
-[FastAPI]           REST API (/status, /stats, /calibration, /process)
+    |
+    v
+[Detector]          YOLOv11n - бэкенд по env: pytorch (CUDA) / onnx / rknn (NPU)
+    | bbox + conf
+    v
+[Tracker]           BotSort+OSNet ReID (дефолт, PC) | ByteTrack (лёгкий, edge)
+    | track_id + bbox
+    v
+[Counter]           tripwire (две линии, дефолт) | lifecycle | гистерезис 2-10 с
+    | entry/exit events
+    v
+[EventStore]        SQLite - персистентность событий
+    |
+    v
+[FastAPI]           REST API (/status, /stats, /calibration, /process, камеры)
 ```
+
+Бэкенды детектора и трекера переключаются переменными окружения
+(`VKR_DETECTOR_BACKEND`, `VKR_TRACKER_BACKEND`) без правки кода - это позволяет
+одним кодом покрыть и десктоп с GPU, и edge-плату RK3588 (см. [EDGE_DEPLOY.md](EDGE_DEPLOY.md)).
 
 ---
 
 ## Модель
 
-Используется **YOLOv11n** — файнтюнинг на MOT20 (детекция людей в плотных сценах).
+Используется **YOLOv11n** - файнтюнинг на MOT20 (детекция людей в плотных сценах).
 
-- Весовой файл: `models/yolo11n_mot20_v2.pt`
-- Обучение: [`notebooks/02_train_detection.ipynb`](notebooks/02_train_detection.ipynb)
-- mAP@50: **93.1%**, F1: **88.3%**
+- Весовой файл детектора: `models/yolo11n_mot20_v2.pt`
+- Обучение (2 этапа): [`notebooks/detector_training.ipynb`](notebooks/detector_training.ipynb)
+- mAP@50: **93.1%**, F1 (bbox): **88.3%** - это качество детекции боксов на MOT20,
+  не путать с F1 подсчёта событий (см. раздел "Метрики точности")
+
+Дефолтный трекер (BotSort+OSNet ReID) дополнительно использует ReID-веса
+`models/osnet_x0_25_msmt17.pt`. Для edge есть экспорт детектора:
+`models/yolo11n_mot20_v2.onnx` и `models/yolo11n_mot20_v2.rknn` (NPU RK3588).
 
 Базовые предобученные веса (COCO) загружаются автоматически через Ultralytics при первом запуске.
 
@@ -239,50 +288,70 @@ curl http://localhost:8000/status
 ## Структура проекта
 
 ```
-vkr/
-├── app/
-│   ├── main.py               # Точка входа FastAPI
-│   ├── config.py             # Все настройки (пороги, пути, параметры линии)
-│   ├── api/
-│   │   ├── routes.py         # Эндпоинты: /status, /stats, /calibration, /process
-│   │   └── schemas.py        # Pydantic-схемы запросов/ответов
-│   ├── core/
-│   │   ├── detector.py       # YOLOv11n inference
-│   │   ├── tracker.py        # ByteTrack
-│   │   ├── counter.py        # Подсчёт по линии с гистерезисом
-│   │   └── pipeline.py       # Оркестратор кадр→детекция→трекинг→счёт
-│   └── storage/
-│       └── db.py             # SQLite EventStore
-├── notebooks/
-│   ├── 01_dataset_prep.ipynb       # Подготовка данных
-│   ├── 02_train_detection.ipynb    # Обучение YOLOv11n
-│   ├── 03_tracker_tuning_eval.ipynb# Настройка ByteTrack, IDF1 на MOT20
-│   └── 04_metrics_acceptance.ipynb # Приёмочные метрики
-├── models/                   # Веса (не в репозитории, см. Releases)
-├── demo.py                   # CLI-демо на тестовых видео
-├── Dockerfile
-├── requirements-docker.txt   # Runtime-зависимости
-├── requirements.txt          # Dev + Jupyter
-└── CHANGELOG.md
+vkr_passenger_flow_counter/
++-- app/
+|   +-- main.py               # Точка входа FastAPI
+|   +-- config.py             # Все настройки (пороги, пути, бэкенды, линии)
+|   +-- api/
+|   |   +-- routes.py         # /status, /stats, /calibration, /process, /upload...
+|   |   +-- camera_routes.py  # Многокамерный режим (connect/start/stop)
+|   |   +-- stats_routes.py   # Агрегированная статистика по камерам
+|   |   +-- schemas.py        # Pydantic-схемы запросов/ответов
+|   +-- core/
+|   |   +-- detector.py       # YOLOv11n inference (PyTorch/CUDA)
+|   |   +-- detector_onnx.py  # Бэкенд ONNX Runtime
+|   |   +-- detector_rknn.py  # Бэкенд RKNN NPU (edge RK3588)
+|   |   +-- tracker.py        # ByteTrack (лёгкий, без ReID)
+|   |   +-- tracker_osnet.py  # BotSort + OSNet ReID (дефолт на PC)
+|   |   +-- counter.py        # Подсчёт: tripwire (2 линии) / lifecycle / гистерезис
+|   |   +-- pipeline.py       # Оркестратор кадр-детекция-трекинг-счёт
+|   +-- storage/
+|       +-- db.py             # SQLite EventStore
+|       +-- camera_config.py  # Персист конфига камер (авто-восстановление)
++-- notebooks/                # Подготовка двух продакшен-путей (ПО)
+|   +-- data_preparation.ipynb        # Данные: COCO-person + MOT20 (общая база)
+|   +-- detector_training.ipynb       # YOLOv11n: COCO -> MOT20 DA -> yolo11n_mot20_v2
+|   +-- tracker_edge_bytetrack.ipynb  # Edge-путь: ByteTrack (grid на MOT20)
+|   +-- tracker_desktop_botsort.ipynb # Desktop-путь: BoT-SORT + OSNet ReID
++-- scripts/
+|   +-- export.py             # Экспорт детектора: PT->ONNX (desktop) / ONNX->RKNN (edge)
++-- tests/                    # 20 ключевых тестов (test_key_diploma.py) + conftest
++-- models/                   # Веса (не в репозитории, гитигнор) + конфиги трекера
++-- Dockerfile                # PC-образ (GPU)
++-- Dockerfile.edge           # Edge-образ (RK3588, NPU)
++-- docker-compose.yml
++-- requirements-docker.txt   # Runtime PC (GPU)
++-- requirements-edge.txt     # Runtime edge (RK3588, без torch)
++-- requirements.txt          # Dev + Jupyter
++-- EDGE_DEPLOY.md            # Деплой на RK3588
++-- CHANGELOG.md
 ```
 
 ---
 
-## Отчёт и презентация
+## Презентация
 
-- Отчёт (ВКР): *будет добавлена ссылка после защиты*
 - Презентация: *будет добавлена ссылка после защиты*
 
 ---
 
 ## Лицензия
 
-MIT License — см. [LICENSE](LICENSE)
+**GNU AGPL-3.0** - см. [LICENSE](LICENSE).
 
 ```
 Copyright (c) 2025 Краснов Данила Анатольевич
 ```
 
-Используемые компоненты: Ultralytics YOLO (AGPL-3.0), supervision (MIT), FastAPI (MIT), PyTorch (BSD-3).
+Проект использует **Ultralytics YOLO** и **boxmot**, распространяемые под **AGPL-3.0**
+(сильный копилефт + сетевая оговорка §13). Поэтому комбинированное произведение и
+сетевой сервис на его основе наследуют AGPL-3.0: при предоставлении доступа по сети
+исходный код должен оставаться открытым под той же лицензией. Проект академический
+(ВКР, НИ ТГУ), без коммерческого использования.
 
-> **Важно:** Ultralytics YOLO распространяется под лицензией AGPL-3.0. Для коммерческого использования требуется отдельная коммерческая лицензия от Ultralytics.
+Лицензии всех зависимостей - в [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+> **Ограничение на данные (некоммерческое).** Обученные веса наследуют лицензии
+> датасетов: `yolo11n_mot20_v2` обучен на **MOT20** (академическая, некоммерческая),
+> детектор голов - на **CrowdHuman/SCUT-HEAD** (research-only), ReID-веса OSNet - на
+> **MSMT17** (research). Использование - только в научных/учебных целях.

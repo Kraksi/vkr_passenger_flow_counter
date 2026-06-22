@@ -1,0 +1,12 @@
+{
+  "tracker": "botsort_osnet_msmt17",
+  "detector": "models/yolo11n_mot20_v2.pt",
+  "idf1_mot20_train": 0.7341,
+  "mota_mot20_train": 0.8179,
+  "per_seq": {
+    "MOT20-01": 0.7015,
+    "MOT20-02": 0.6554,
+    "MOT20-03": 0.8642,
+    "MOT20-05": 0.7153
+  }
+}

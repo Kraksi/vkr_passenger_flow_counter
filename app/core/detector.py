@@ -1,4 +1,3 @@
-# Обёртка над YOLOv11 — инференс и фильтрация по conf
 from __future__ import annotations
 from pathlib import Path
 import numpy as np
@@ -13,7 +12,7 @@ from app.config import (
 
 
 class Detector:
-    """Загружает YOLOv11n и выполняет детекцию людей на кадре."""
+    """YOLOv11n, детекция людей на кадре"""
 
     def __init__(
         self,
@@ -21,25 +20,22 @@ class Detector:
         conf: float = DETECTOR_CONF_THRESHOLD,
         iou: float = DETECTOR_IOU_THRESHOLD,
         device: str = DETECTOR_DEVICE,
+        classes: list[int] | None = None,
     ) -> None:
         self.model_path = model_path
         self.conf = conf
         self.iou = iou
         self.device = device
+        self.classes = [DETECTOR_CLASS_PERSON] if classes is None else classes
         self.model: YOLO | None = None
 
     def load(self) -> None:
-        """Загрузить веса модели в память GPU."""
+        """грузим веса в gpu"""
         self.model = YOLO(str(self.model_path))
         self.model.to(self.device)
 
     def detect(self, frame: np.ndarray) -> list[dict]:
-        """
-        Принять кадр (H x W x 3, BGR), вернуть список детекций.
-
-        Каждая детекция: {'bbox': [x1, y1, x2, y2], 'conf': float, 'class': int}
-        Возвращает только класс DETECTOR_CLASS_PERSON.
-        """
+        """кадр BGR - список детекций {bbox, conf, class}, только person"""
         if self.model is None:
             raise RuntimeError("Модель не загружена. Вызовите load().")
 
@@ -48,7 +44,7 @@ class Detector:
             conf=self.conf,
             iou=self.iou,
             device=self.device,
-            classes=[DETECTOR_CLASS_PERSON],
+            classes=self.classes,
             verbose=False,
         )[0]
 

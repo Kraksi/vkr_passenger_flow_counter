@@ -2,29 +2,35 @@
 data/
 runs/
 notebooks/
+tests/
+logs/
 .venv/
+.pytest_cache/
 __pycache__/
 *.pyc
-
-# Скрипты обучения
-finetune_mot20.py
-run_tracker_eval.py
-watch_training.py
-
-# Git и IDE
+*.ipynb
 .git/
 .gitignore
+.dockerignore
 .vscode/
 *.md
-
-# Предобученные веса (не финальные)
 notebooks/*.pt
 yolo11n.pt
+yolo11s.pt
+yolo11x.pt
 yolo26n.pt
-
-# SQLite БД (создаётся при запуске)
+yolo11n_mot20.pt
+models/yolo11n_mot20.pt
+models/yolo11n_people.pt
+models/yolo11s_door1.pt
+models/yolo11x_mot20.pt
+models/yolov8n_head.pt
+models/yolov8m_head.pt
+models/yolo11n_mot20_v2.onnx
+models/*.rknn
 storage.db
-
-# Временные файлы
+camera_config.json
+uv.lock
+*.xlsx
 *.tmp
 *.log
